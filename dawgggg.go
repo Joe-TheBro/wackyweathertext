@@ -12,6 +12,9 @@ import (
 	// _ "github.com/mattn/go-sqlite3"
 )
 
+const ERRORLATITUDE float64 = -91.0
+const ERRORLONGITUDE float64 = -181.0
+
 type geocodeResponse struct {
 	Name        string  `json:"name"`
 	Longitude   float64 `json:"longitude"`
@@ -24,45 +27,81 @@ type geocodeResponse struct {
 	Population  int     `json:"population"`
 }
 
-func geocodeCity(city string) (float64, float64, error) {
-	client := &http.Client{}
-	cityEncoded := url.QueryEscape(city)
-	req, err := http.NewRequest("GET", "https://api.geocode.city/autocomplete?limit=1&q="+cityEncoded, nil)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	req.Header.Set("accept", "application/json;charset=utf-8")
-	resp, err := client.Do(req)
-	if err != nil {
-		return 0, 0, err
-	}
+func GeocodeCity(city string) (float64, float64, error) {
+	resp, err := GetGeocodeCityRequest(city)
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return 0, 0, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	if IsError(err) {
+		return ERRORLONGITUDE, ERRORLATITUDE, err
 	}
 
-	dec := json.NewDecoder(resp.Body)
-	var formattedResponse []geocodeResponse
-	if err := dec.Decode(&formattedResponse); err != nil {
-		if err == io.EOF {
-			return 0, 0, errors.New("no valid geocode response found")
-		}
-		return 0, 0, err
+	err = Check200StatusCode(resp)
+	if IsError(err) {
+		return ERRORLONGITUDE, ERRORLONGITUDE, err
 	}
 
-	if len(formattedResponse) == 0 {
-		return 0, 0, errors.New("no results found")
+	result, err := DecodeResponse(resp)
+	if IsError(err) {
+		return ERRORLONGITUDE, ERRORLATITUDE, err
 	}
 
-	result := formattedResponse[0]
 	fmt.Printf("%s\n%f\n%f\n%s\n", result.Name, result.Longitude, result.Latitude, result.Country)
 	return result.Latitude, result.Longitude, nil
 }
 
+func GetGeocodeCityRequest(city string) (*http.Response, error) {
+	cityEncoded := url.QueryEscape(city)
+	client := &http.Client{}
+
+	req, err := http.NewRequest("GET", "https://api.geocode.city/autocomplete?limit=1&q="+cityEncoded, nil)
+	if IsError(err) {
+		return nil, err
+	}
+	req.Header.Set("accept", "application/json;charset=utf-8")
+	resp, err := client.Do(req)
+
+	if IsError(err) {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+func Check200StatusCode(resp *http.Response) error {
+	if resp.StatusCode != http.StatusOK {
+		err := fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return err
+	}
+	return nil
+}
+
+func DecodeResponse(resp *http.Response) (*geocodeResponse, error) {
+	dec := json.NewDecoder(resp.Body)
+
+	var formattedResponse []geocodeResponse
+	if err := dec.Decode(&formattedResponse); err != nil {
+		if err == io.EOF {
+			return nil, errors.New("no valid geocode response found")
+		}
+		return nil, err
+	}
+
+	if len(formattedResponse) == 0 {
+		return nil, errors.New("no results found")
+	}
+
+	coords := formattedResponse[0]
+	return &coords, nil
+}
+
+func IsError(err error) bool {
+	return err != nil
+}
+
+// ฅ^•ﻌ•^ฅ
+
 func main() {
-	lat, long, err := geocodeCity("Sioux Falls")
+	lat, long, err := GeocodeCity("Sioux Falls")
 	if err != nil {
 		log.Fatal(err)
 	}
