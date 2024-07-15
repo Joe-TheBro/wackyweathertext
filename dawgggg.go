@@ -27,7 +27,7 @@ type geocodeResponse struct {
 func geocodeCity(city string) (float64, float64, error) {
 	client := &http.Client{}
 	cityEncoded := url.QueryEscape(city)
-	req, err := http.NewRequest("GET", "https://geocode.city/autocomplete?limit=1&q="+cityEncoded, nil)
+	req, err := http.NewRequest("GET", "https://api.geocode.city/autocomplete?limit=1&q="+cityEncoded, nil)
 	if err != nil {
 		return 0, 0, err
 	}
