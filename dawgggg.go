@@ -28,7 +28,10 @@ type geocodeResponse struct {
 }
 
 func GeocodeCity(city string) (float64, float64, error) {
-	resp, err := GetGeocodeCityRequest(city)
+	url := GeocodeCityUrl(city)
+	header := "application/json;charset=utf-8"
+
+	resp, err := GetRequest(url, header)
 	defer resp.Body.Close()
 
 	if IsError(err) {
@@ -49,15 +52,19 @@ func GeocodeCity(city string) (float64, float64, error) {
 	return result.Latitude, result.Longitude, nil
 }
 
-func GetGeocodeCityRequest(city string) (*http.Response, error) {
+func GeocodeCityUrl(city string) string {
 	cityEncoded := url.QueryEscape(city)
+	return "https://api.geocode.city/autocomplete?limit=1&q=" + cityEncoded
+}
+
+func GetRequest(url string, header string) (*http.Response, error) {
 	client := &http.Client{}
 
-	req, err := http.NewRequest("GET", "https://api.geocode.city/autocomplete?limit=1&q="+cityEncoded, nil)
+	req, err := http.NewRequest("GET", url, nil)
 	if IsError(err) {
 		return nil, err
 	}
-	req.Header.Set("accept", "application/json;charset=utf-8")
+	req.Header.Set("accept", header)
 	resp, err := client.Do(req)
 
 	if IsError(err) {
