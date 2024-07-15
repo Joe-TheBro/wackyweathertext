@@ -7,26 +7,27 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	// "github.com/piprate/json_gold/ld"
 	// _ "github.com/mattn/go-sqlite3"
 )
 
 type geocodeResponse struct {
-	Name        string
-	Longitude   float64
-	Latitude    float64
-	Country     string
-	CountryCode string
-	Region      string
-	District    string
-	Timezone    string
-	Population  int
+	Name        string  `json:"name"`
+	Longitude   float64 `json:"longitude"`
+	Latitude    float64 `json:"latitude"`
+	Country     string  `json:"country"`
+	CountryCode string  `json:"country_code"`
+	Region      string  `json:"region"`
+	District    string  `json:"district"`
+	Timezone    string  `json:"timezone"`
+	Population  int     `json:"population"`
 }
 
 func geocodeCity(city string) (float64, float64, error) {
-	// Geocode the city
 	client := &http.Client{}
-	req, err := http.NewRequest("GET", "https://geocode.city/autocomplete?limit=1&q="+city, nil)
+	cityEncoded := url.QueryEscape(city)
+	req, err := http.NewRequest("GET", "https://geocode.city/autocomplete?limit=1&q="+cityEncoded, nil)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -36,22 +37,28 @@ func geocodeCity(city string) (float64, float64, error) {
 	if err != nil {
 		return 0, 0, err
 	}
+	defer resp.Body.Close()
 
-	if resp != nil {
-		defer resp.Body.Close()
-	}
-
-	if resp == nil {
-		return 0, 0, errors.New("no response from geocode.city, resp is nil")
+	if resp.StatusCode != http.StatusOK {
+		return 0, 0, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
 	dec := json.NewDecoder(resp.Body)
-	var formattedResponse geocodeResponse
-	if err := dec.Decode(&formattedResponse); err == io.EOF || err == nil { // we don't care if it reaches the end of the json response so we ignore io.EOF
-		return 0, 0, errors.New("no valid geocode response found")
+	var formattedResponse []geocodeResponse
+	if err := dec.Decode(&formattedResponse); err != nil {
+		if err == io.EOF {
+			return 0, 0, errors.New("no valid geocode response found")
+		}
+		return 0, 0, err
 	}
-	fmt.Printf("%s\n%f\n%f\n%s", formattedResponse.Name, formattedResponse.Longitude, formattedResponse.Latitude, formattedResponse.Country)
-	return formattedResponse.Latitude, formattedResponse.Longitude, nil
+
+	if len(formattedResponse) == 0 {
+		return 0, 0, errors.New("no results found")
+	}
+
+	result := formattedResponse[0]
+	fmt.Printf("%s\n%f\n%f\n%s\n", result.Name, result.Longitude, result.Latitude, result.Country)
+	return result.Latitude, result.Longitude, nil
 }
 
 func main() {
@@ -60,7 +67,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("lat: %f, long: %f", lat, long)
+	fmt.Printf("lat: %f, long: %f\n", lat, long)
 }
 
 /*type Weather interface {
