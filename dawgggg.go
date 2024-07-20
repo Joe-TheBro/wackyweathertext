@@ -8,19 +8,17 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"reflect"
 	// "github.com/piprate/json_gold/ld"
 	// _ "github.com/mattn/go-sqlite3"
 )
 
-const ERRORLATITUDE float64 = -91.0
-const ERRORLONGITUDE float64 = -181.0
-
-type geocodeResponse struct {
+type GeocodeResponse struct {
 	Name        string  `json:"name"`
 	Longitude   float64 `json:"longitude"`
 	Latitude    float64 `json:"latitude"`
 	Country     string  `json:"country"`
-	CountryCode string  `json:"country_code"`
+	CountryCode string  `json:"countryCode"`
 	Region      string  `json:"region"`
 	District    string  `json:"district"`
 	Timezone    string  `json:"timezone"`
@@ -28,81 +26,127 @@ type geocodeResponse struct {
 }
 
 func GeocodeCity(city string) (float64, float64, error) {
+	const ERRORLATITUDE float64 = -91.0
+	const ERRORLONGITUDE float64 = -181.0
+
+	GeocodeCityUrl := func(city string) string {
+		cityEncoded := url.QueryEscape(city)
+		return "https://api.geocode.city/autocomplete?limit=1&q=" + cityEncoded
+	}
+
 	url := GeocodeCityUrl(city)
-	header := "application/json;charset=utf-8"
+	requestHeaders := make(map[string]string)
+	requestHeaders["accept"] = "application/json;charset=utf-8"
 
-	resp, err := GetRequest(url, header)
-	defer resp.Body.Close()
+	resp, err := GetRequest(url, requestHeaders)
 
-	if IsError(err) {
+	// while unlikely, there is a chance that our response empty, if we try to Close()
+	// having an empty body it would dereference a nullptr possibly leading to unexpected behavior, ＞﹏＜
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+
+	if err != nil {
 		return ERRORLONGITUDE, ERRORLATITUDE, err
 	}
 
-	err = Check200StatusCode(resp)
-	if IsError(err) {
+	err = CheckHttpStatusCode(resp, 200)
+	if err != nil {
 		return ERRORLONGITUDE, ERRORLONGITUDE, err
 	}
 
-	result, err := DecodeResponse(resp)
-	if IsError(err) {
+	var geocodeResponse []GeocodeResponse
+	err = DecodeJsonResponse(resp, &geocodeResponse)
+	if err != nil {
 		return ERRORLONGITUDE, ERRORLATITUDE, err
 	}
 
-	fmt.Printf("%s\n%f\n%f\n%s\n", result.Name, result.Longitude, result.Latitude, result.Country)
-	return result.Latitude, result.Longitude, nil
+	//* Debug print statement
+	fmt.Printf("%s\n%f\n%f\n%s\n", geocodeResponse[0].Name, geocodeResponse[0].Longitude, geocodeResponse[0].Latitude, geocodeResponse[0].Country)
+	return geocodeResponse[0].Latitude, geocodeResponse[0].Longitude, nil
 }
 
-func GeocodeCityUrl(city string) string {
-	cityEncoded := url.QueryEscape(city)
-	return "https://api.geocode.city/autocomplete?limit=1&q=" + cityEncoded
-}
-
-func GetRequest(url string, header string) (*http.Response, error) {
+func GetRequest(url string, headers map[string]string) (*http.Response, error) {
 	client := &http.Client{}
 
 	req, err := http.NewRequest("GET", url, nil)
-	if IsError(err) {
+	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("accept", header)
+
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+
 	resp, err := client.Do(req)
 
-	if IsError(err) {
+	if err != nil {
 		return nil, err
 	}
 
 	return resp, nil
 }
 
-func Check200StatusCode(resp *http.Response) error {
-	if resp.StatusCode != http.StatusOK {
+func CheckHttpStatusCode(resp *http.Response, status int) error {
+	if resp.StatusCode != status {
 		err := fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 		return err
 	}
 	return nil
 }
 
-func DecodeResponse(resp *http.Response) (*geocodeResponse, error) {
+func DecodeJsonResponse(resp *http.Response, v interface{}) error {
 	dec := json.NewDecoder(resp.Body)
 
-	var formattedResponse []geocodeResponse
-	if err := dec.Decode(&formattedResponse); err != nil {
+	// First, decode into a generic interface{} to check the type
+	var rawResponse interface{}
+	if err := dec.Decode(&rawResponse); err != nil {
 		if err == io.EOF {
-			return nil, errors.New("no valid geocode response found")
+			return errors.New("no valid response found")
 		}
-		return nil, err
+		return err
 	}
 
-	if len(formattedResponse) == 0 {
-		return nil, errors.New("no results found")
+	rawJSON, err := json.Marshal(rawResponse)
+	if err != nil {
+		return err
 	}
 
-	coords := formattedResponse[0]
-	return &coords, nil
-}
+	// Handle if the response is an array or a single object
+	valueType := reflect.TypeOf(v).Elem()
+	fmt.Printf("Expected type: %s\n", valueType.Kind())
+	fmt.Printf("rawResponse Type: %s\n", reflect.TypeOf(rawResponse).Kind())
+	if reflect.TypeOf(rawResponse).Kind() == reflect.Slice {
+		// Ensure v is a slice type
+		if valueType.Kind() != reflect.Slice {
+			return errors.New("expected a slice type for the response")
+		}
 
-func IsError(err error) bool {
-	return err != nil
+		// Create a new slice of the appropriate type
+		slicePtr := reflect.New(reflect.SliceOf(valueType.Elem())).Interface()
+		if err := json.Unmarshal(rawJSON, slicePtr); err != nil {
+			return err
+		}
+
+		// Set the original pointer to the new slice
+		reflect.ValueOf(v).Elem().Set(reflect.ValueOf(slicePtr).Elem())
+	} else {
+		// Ensure v is not a slice type
+		if valueType.Kind() == reflect.Slice {
+			return errors.New("expected a single object type for the response")
+		}
+
+		// Create a new instance of the appropriate type
+		objPtr := reflect.New(valueType).Interface()
+		if err := json.Unmarshal(rawJSON, objPtr); err != nil {
+			return err
+		}
+
+		// Set the original pointer to the new object
+		reflect.ValueOf(v).Elem().Set(reflect.ValueOf(objPtr).Elem())
+	}
+
+	return nil
 }
 
 // ฅ^•ﻌ•^ฅ
