@@ -25,6 +25,13 @@ type GeocodeResponse struct {
 	Population  int     `json:"population"`
 }
 
+type LocationMetadata struct {
+	Properties struct {
+		Forecast       string `json:"forecast"`
+		ForecastHourly string `json:"forecastHourly"`
+	} `json:"properties"`
+}
+
 func GeocodeCity(city string) (float64, float64, error) {
 	const ERRORLATITUDE float64 = -91.0
 	const ERRORLONGITUDE float64 = -181.0
@@ -165,13 +172,13 @@ func GetForecastLink(latitude float64, longitude float64) (link string, err erro
 		return "", err
 	}
 
-	// Testing shit
-	bodyBytes, err := io.ReadAll(resp.Body)
+	var metadata LocationMetadata
+	err = DecodeJsonResponse(resp, &metadata)
 	if err != nil {
 		return "", err
 	}
-	bodyString := string(bodyBytes)
-	fmt.Println(bodyString)
+
+	fmt.Println(metadata.Properties.Forecast)
 
 	return "", nil
 }
