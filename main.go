@@ -62,7 +62,7 @@ func GeocodeCity(city string) (float64, float64, error) {
 	}
 
 	//* Debug print statement
-	fmt.Printf("%s\n%f\n%f\n%s\n", geocodeResponse[0].Name, geocodeResponse[0].Longitude, geocodeResponse[0].Latitude, geocodeResponse[0].Country)
+	//fmt.Printf("%s\n%f\n%f\n%s\n", geocodeResponse[0].Name, geocodeResponse[0].Longitude, geocodeResponse[0].Latitude, geocodeResponse[0].Country)
 	return geocodeResponse[0].Latitude, geocodeResponse[0].Longitude, nil
 }
 
@@ -114,8 +114,8 @@ func DecodeJsonResponse(resp *http.Response, v interface{}) error {
 
 	// Handle if the response is an array or a single object
 	valueType := reflect.TypeOf(v).Elem()
-	fmt.Printf("Expected type: %s\n", valueType.Kind())
-	fmt.Printf("rawResponse Type: %s\n", reflect.TypeOf(rawResponse).Kind())
+	/*fmt.Printf("Expected type: %s\n", valueType.Kind())
+	fmt.Printf("rawResponse Type: %s\n", reflect.TypeOf(rawResponse).Kind())*/
 	if reflect.TypeOf(rawResponse).Kind() == reflect.Slice {
 		// Ensure v is a slice type
 		if valueType.Kind() != reflect.Slice {
@@ -149,21 +149,41 @@ func DecodeJsonResponse(resp *http.Response, v interface{}) error {
 	return nil
 }
 
+func GetForecastLink(latitude float64, longitude float64) (link string, err error) {
+	locationLink := fmt.Sprintf("https://api.weather.gov/points/%.4g,%.4g", latitude, longitude)
+
+	requestHeaders := make(map[string]string)
+	requestHeaders["accept"] = "application/geo+json"
+
+	resp, err := GetRequest(locationLink, requestHeaders)
+	if err != nil {
+		return "", err
+	}
+
+	err = CheckHttpStatusCode(resp, 200)
+	if err != nil {
+		return "", err
+	}
+
+	// Testing shit
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	bodyString := string(bodyBytes)
+	fmt.Println(bodyString)
+
+	return "", nil
+}
+
 // ฅ^•ﻌ•^ฅ
 
 func main() {
 	lat, long, err := GeocodeCity("Sioux Falls")
+	_, err = GetForecastLink(lat, long)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("lat: %f, long: %f\n", lat, long)
+	//fmt.Printf("lat: %f, long: %f\n", lat, long)
 }
-
-/*type Weather interface {
-	renderAsciiArt() string
-}
-
-type Sunny struct {
-1
-}*/
