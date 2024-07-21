@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"reflect"
 	"time"
 	// "github.com/piprate/json_gold/ld"
@@ -189,7 +190,7 @@ func DecodeJsonResponse(resp *http.Response, v interface{}) error {
 	return nil
 }
 
-func GetForecastLink(latitude float64, longitude float64) (link string, err error) {
+func GetForecastLink(latitude float64, longitude float64) (string, error) {
 	locationLink := fmt.Sprintf("https://api.weather.gov/points/%.4g,%.4g", latitude, longitude)
 
 	requestHeaders := make(map[string]string)
@@ -221,7 +222,7 @@ func PrintForecastCityState(metadata LocationMetadata) {
 	fmt.Printf("%s, %s\n", location.City, location.State)
 }
 
-func GetDailyForecasts(link string) (forecasts []ForecastPeriods, err error) {
+func GetDailyForecasts(link string) ([]ForecastPeriods, error) {
 	requestHeaders := make(map[string]string)
 	requestHeaders["accept"] = "application/geo+json"
 
@@ -246,10 +247,25 @@ func GetDailyForecasts(link string) (forecasts []ForecastPeriods, err error) {
 	return forecast, nil
 }
 
+func CheckArgs(args []string) bool {
+	if len(args) <= 0 {
+		fmt.Println("Usage: 'go build wackyweathertext.go'\n" +
+			"'./main cityName'\n" +
+			"If your city is more than one word, make sure to wrap your city name with quotation marks.")
+		return false
+	}
+	return true
+}
+
 // ฅ^•ﻌ•^ฅ
 
 func main() {
-	lat, long, err := GeocodeCity("Sioux Falls")
+	args := os.Args[1:]
+	if !CheckArgs(args) {
+		return
+	}
+
+	lat, long, err := GeocodeCity(os.Args[1])
 	if err != nil {
 		log.Fatal(err)
 	}
