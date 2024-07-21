@@ -28,8 +28,14 @@ type GeocodeResponse struct {
 
 type LocationMetadata struct {
 	Properties struct {
-		Forecast       string `json:"forecast"`
-		ForecastHourly string `json:"forecastHourly"`
+		Forecast         string `json:"forecast"`
+		ForecastHourly   string `json:"forecastHourly"`
+		RelativeLocation struct {
+			LocationProperties struct {
+				City  string `json:"city"`
+				State string `json:"state"`
+			} `json:"properties"`
+		} `json:"relativeLocation"`
 	} `json:"properties"`
 }
 
@@ -42,7 +48,7 @@ type ForecastInfo struct {
 
 type ForecastPeriods struct {
 	Number                     int       `json:"number"`
-	Name                       string    `json:"name"`
+	PeriodName                 string    `json:"name"`
 	StartTime                  time.Time `json:"startTime"`
 	EndTime                    time.Time `json:"endTime"`
 	IsDayTime                  bool      `json:"isDayTime"`
@@ -205,7 +211,14 @@ func GetForecastLink(latitude float64, longitude float64) (link string, err erro
 		return "", err
 	}
 
+	PrintForecastCityState(metadata)
+
 	return metadata.Properties.Forecast, nil
+}
+
+func PrintForecastCityState(metadata LocationMetadata) {
+	location := metadata.Properties.RelativeLocation.LocationProperties
+	fmt.Printf("%s, %s\n", location.City, location.State)
 }
 
 func GetDailyForecasts(link string) (forecasts []ForecastPeriods, err error) {
@@ -253,5 +266,5 @@ func main() {
 
 	currForecast := forecasts[0]
 
-	fmt.Printf("%s\n%d°%s\n%s", currForecast.Name, currForecast.Temperature, currForecast.TemperatureUnit, currForecast.DetailedForecast)
+	fmt.Printf("%s\n%d°%s\n%s", currForecast.PeriodName, currForecast.Temperature, currForecast.TemperatureUnit, currForecast.DetailedForecast)
 }
