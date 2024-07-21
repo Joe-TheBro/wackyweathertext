@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"time"
 	// "github.com/piprate/json_gold/ld"
 	// _ "github.com/mattn/go-sqlite3"
 )
@@ -30,6 +31,32 @@ type LocationMetadata struct {
 		Forecast       string `json:"forecast"`
 		ForecastHourly string `json:"forecastHourly"`
 	} `json:"properties"`
+}
+
+type ForecastInfo struct {
+	Properties struct {
+		GeneratedAt time.Time         `json:"generatedAt"`
+		Periods     []ForecastPeriods `json:"periods"`
+	} `json:"properties"`
+}
+
+type ForecastPeriods struct {
+	Number                     int       `json:"number"`
+	Name                       string    `json:"name"`
+	StartTime                  time.Time `json:"startTime"`
+	EndTime                    time.Time `json:"endTime"`
+	IsDayTime                  bool      `json:"isDayTime"`
+	Temperature                int       `json:"temperature"`
+	TemperatureUnit            string    `json:"temperatureUnit"`
+	TemperatureTrend           string    `json:"temperatureTrend"`
+	ProbabilityOfPrecipitation struct {
+		UnitCode string `json:"unitCode"`
+		Value    int    `json:"value"`
+	} `json:"probabilityOfPrecipitation"`
+	WindSpeed        string `json:"windSpeed"`
+	WindDirection    string `json:"windDirection"`
+	ShortForecast    string `json:"shortForecast"`
+	DetailedForecast string `json:"detailedForecast"`
 }
 
 func GeocodeCity(city string) (float64, float64, error) {
@@ -178,19 +205,53 @@ func GetForecastLink(latitude float64, longitude float64) (link string, err erro
 		return "", err
 	}
 
-	fmt.Println(metadata.Properties.Forecast)
+	return metadata.Properties.Forecast, nil
+}
 
-	return "", nil
+func GetDailyForecasts(link string) (forecasts []ForecastPeriods, err error) {
+	requestHeaders := make(map[string]string)
+	requestHeaders["accept"] = "application/geo+json"
+
+	resp, err := GetRequest(link, requestHeaders)
+	if err != nil {
+		return nil, err
+	}
+
+	err = CheckHttpStatusCode(resp, 200)
+	if err != nil {
+		return nil, err
+	}
+
+	var forecastInfo ForecastInfo
+	err = DecodeJsonResponse(resp, &forecastInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	forecast := forecastInfo.Properties.Periods
+
+	return forecast, nil
 }
 
 // ฅ^•ﻌ•^ฅ
 
 func main() {
 	lat, long, err := GeocodeCity("Sioux Falls")
-	_, err = GetForecastLink(lat, long)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	//fmt.Printf("lat: %f, long: %f\n", lat, long)
+	forecastLink, err := GetForecastLink(lat, long)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	forecasts, err := GetDailyForecasts(forecastLink)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	currForecast := forecasts[0]
+
+	fmt.Printf("%s\n%d°%s\n%s", currForecast.Name, currForecast.Temperature, currForecast.TemperatureUnit, currForecast.DetailedForecast)
 }
