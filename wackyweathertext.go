@@ -8,7 +8,9 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"reflect"
+	"time"
 	// "github.com/piprate/json_gold/ld"
 	// _ "github.com/mattn/go-sqlite3"
 )
@@ -23,6 +25,45 @@ type GeocodeResponse struct {
 	District    string  `json:"district"`
 	Timezone    string  `json:"timezone"`
 	Population  int     `json:"population"`
+}
+
+type LocationMetadata struct {
+	Properties struct {
+		Forecast         string `json:"forecast"`
+		ForecastHourly   string `json:"forecastHourly"`
+		RelativeLocation struct {
+			LocationProperties struct {
+				City  string `json:"city"`
+				State string `json:"state"`
+			} `json:"properties"`
+		} `json:"relativeLocation"`
+	} `json:"properties"`
+}
+
+type ForecastInfo struct {
+	Properties struct {
+		GeneratedAt time.Time         `json:"generatedAt"`
+		Periods     []ForecastPeriods `json:"periods"`
+	} `json:"properties"`
+}
+
+type ForecastPeriods struct {
+	Number                     int       `json:"number"`
+	PeriodName                 string    `json:"name"`
+	StartTime                  time.Time `json:"startTime"`
+	EndTime                    time.Time `json:"endTime"`
+	IsDayTime                  bool      `json:"isDayTime"`
+	Temperature                int       `json:"temperature"`
+	TemperatureUnit            string    `json:"temperatureUnit"`
+	TemperatureTrend           string    `json:"temperatureTrend"`
+	ProbabilityOfPrecipitation struct {
+		UnitCode string `json:"unitCode"`
+		Value    int    `json:"value"`
+	} `json:"probabilityOfPrecipitation"`
+	WindSpeed        string `json:"windSpeed"`
+	WindDirection    string `json:"windDirection"`
+	ShortForecast    string `json:"shortForecast"`
+	DetailedForecast string `json:"detailedForecast"`
 }
 
 func GeocodeCity(city string) (float64, float64, error) {
@@ -62,7 +103,7 @@ func GeocodeCity(city string) (float64, float64, error) {
 	}
 
 	//* Debug print statement
-	fmt.Printf("%s\n%f\n%f\n%s\n", geocodeResponse[0].Name, geocodeResponse[0].Longitude, geocodeResponse[0].Latitude, geocodeResponse[0].Country)
+	//fmt.Printf("%s\n%f\n%f\n%s\n", geocodeResponse[0].Name, geocodeResponse[0].Longitude, geocodeResponse[0].Latitude, geocodeResponse[0].Country)
 	return geocodeResponse[0].Latitude, geocodeResponse[0].Longitude, nil
 }
 
@@ -114,8 +155,8 @@ func DecodeJsonResponse(resp *http.Response, v interface{}) error {
 
 	// Handle if the response is an array or a single object
 	valueType := reflect.TypeOf(v).Elem()
-	fmt.Printf("Expected type: %s\n", valueType.Kind())
-	fmt.Printf("rawResponse Type: %s\n", reflect.TypeOf(rawResponse).Kind())
+	/*fmt.Printf("Expected type: %s\n", valueType.Kind())
+	fmt.Printf("rawResponse Type: %s\n", reflect.TypeOf(rawResponse).Kind())*/
 	if reflect.TypeOf(rawResponse).Kind() == reflect.Slice {
 		// Ensure v is a slice type
 		if valueType.Kind() != reflect.Slice {
@@ -149,21 +190,97 @@ func DecodeJsonResponse(resp *http.Response, v interface{}) error {
 	return nil
 }
 
+func GetForecastLink(latitude float64, longitude float64) (string, error) {
+	locationLink := fmt.Sprintf("https://api.weather.gov/points/%.4g,%.4g", latitude, longitude)
+
+	requestHeaders := make(map[string]string)
+	requestHeaders["accept"] = "application/geo+json"
+
+	resp, err := GetRequest(locationLink, requestHeaders)
+	if err != nil {
+		return "", err
+	}
+
+	err = CheckHttpStatusCode(resp, 200)
+	if err != nil {
+		return "", err
+	}
+
+	var metadata LocationMetadata
+	err = DecodeJsonResponse(resp, &metadata)
+	if err != nil {
+		return "", err
+	}
+
+	PrintForecastCityState(metadata)
+
+	return metadata.Properties.Forecast, nil
+}
+
+func PrintForecastCityState(metadata LocationMetadata) {
+	location := metadata.Properties.RelativeLocation.LocationProperties
+	fmt.Printf("%s, %s\n", location.City, location.State)
+}
+
+func GetDailyForecasts(link string) ([]ForecastPeriods, error) {
+	requestHeaders := make(map[string]string)
+	requestHeaders["accept"] = "application/geo+json"
+
+	resp, err := GetRequest(link, requestHeaders)
+	if err != nil {
+		return nil, err
+	}
+
+	err = CheckHttpStatusCode(resp, 200)
+	if err != nil {
+		return nil, err
+	}
+
+	var forecastInfo ForecastInfo
+	err = DecodeJsonResponse(resp, &forecastInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	forecast := forecastInfo.Properties.Periods
+
+	return forecast, nil
+}
+
+func CheckArgs(args []string) bool {
+	if len(args) <= 0 {
+		fmt.Println("Usage: 'go build wackyweathertext.go'\n" +
+			"'./wackyweathertext cityName'\n" +
+			"If your city is more than one word, make sure to wrap your city name with quotation marks.")
+		return false
+	}
+	return true
+}
+
 // ฅ^•ﻌ•^ฅ
 
 func main() {
-	lat, long, err := GeocodeCity("Sioux Falls")
+	args := os.Args[1:]
+	if !CheckArgs(args) {
+		return
+	}
+
+	lat, long, err := GeocodeCity(os.Args[1])
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("lat: %f, long: %f\n", lat, long)
-}
+	forecastLink, err := GetForecastLink(lat, long)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-/*type Weather interface {
-	renderAsciiArt() string
-}
+	forecasts, err := GetDailyForecasts(forecastLink)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-type Sunny struct {
-1
-}*/
+	currForecast := forecasts[0]
+
+	fmt.Printf("%s\n%d°%s\n%s", currForecast.PeriodName, currForecast.Temperature, currForecast.TemperatureUnit, currForecast.DetailedForecast)
+}
