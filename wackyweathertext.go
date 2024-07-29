@@ -72,7 +72,7 @@ func GeocodeCity(city string) (float64, float64, error) {
 
 	GeocodeCityUrl := func(city string) string {
 		cityEncoded := url.QueryEscape(city)
-		return "https://api.geocode.city/autocomplete?limit=1&q=" + cityEncoded // TODO: rewrite to fetch first US result, solves https://github.com/Joe-TheBro/wackyweathertext/issues/11
+		return "https://api.geocode.city/autocomplete?q=" + cityEncoded
 	}
 
 	geocodeCityUrl := GeocodeCityUrl(city)
@@ -86,7 +86,8 @@ func GeocodeCity(city string) (float64, float64, error) {
 	}
 
 	// there is a chance that our response empty (especially if a user tries to search for a city that does not exist),
-	// if we try to Close() having an empty body it would dereference a nullptr possibly leading to unexpected behavior, ＞﹏＜
+	// if we try to Close() having an empty body it would dereference a nullptr possibly leading to unexpected behavior,
+	// ＞﹏＜
 	if resp.Body != nil {
 		defer func(Body io.ReadCloser) {
 			err := Body.Close()
@@ -131,9 +132,15 @@ func GeocodeCity(city string) (float64, float64, error) {
 		return ERRORLONGITUDE, ERRORLONGITUDE, err
 	}
 
-	//* Debug print statement
-	fmt.Printf("%s\n%f\n%f\n%s\n", geocodeResponse[0].Name, geocodeResponse[0].Longitude, geocodeResponse[0].Latitude, geocodeResponse[0].Country)
-	return geocodeResponse[0].Latitude, geocodeResponse[0].Longitude, nil
+	//fmt.Printf("geocodeResponseLength: %v\n", len(geocodeResponse))
+
+	for i := range geocodeResponse {
+		if geocodeResponse[i].CountryCode == "US" {
+			return geocodeResponse[i].Latitude, geocodeResponse[i].Longitude, nil
+		}
+	}
+
+	return ERRORLONGITUDE, ERRORLONGITUDE, errors.New("the requested city could not be found")
 }
 
 func GetRequest(url string, headers map[string]string) (*http.Response, error) {
