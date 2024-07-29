@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"reflect"
+	"strings"
 	"time"
 	// "github.com/piprate/json_gold/ld"
 	// _ "github.com/mattn/go-sqlite3"
@@ -286,8 +287,9 @@ func GetDailyForecasts(link string) ([]ForecastPeriods, error) {
 func CheckArgs(args []string) bool {
 	if len(args) <= 0 {
 		fmt.Println("Usage: 'go build wackyweathertext.go'\n" +
-			"'./wackyweathertext cityName'\n" +
-			"If your city is more than one word, make sure to wrap your city name with quotation marks.")
+			"'./wackyweathertext cityName'\n")
+		//"If your city is more than one word, make sure to wrap your city name with quotation marks."
+
 		return false
 	}
 	return true
@@ -301,7 +303,8 @@ func main() {
 		return
 	}
 
-	lat, long, err := GeocodeCity(os.Args[1])
+	userInput := strings.Join(os.Args[1:], " ")
+	lat, long, err := GeocodeCity(userInput)
 	if err != nil {
 		log.Fatal(err)
 	}
