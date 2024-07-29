@@ -287,8 +287,9 @@ func GetDailyForecasts(link string) ([]ForecastPeriods, error) {
 func CheckArgs(args []string) bool {
 	if len(args) <= 0 {
 		fmt.Println("Usage: 'go build wackyweathertext.go'\n" +
-			"'./wackyweathertext cityName'\n" +
-			"If your city is more than one word, make sure to wrap your city name with quotation marks.")
+			"'./wackyweathertext cityName'\n")
+		//"If your city is more than one word, make sure to wrap your city name with quotation marks."
+
 		return false
 	}
 	return true
