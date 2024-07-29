@@ -72,23 +72,28 @@ func GeocodeCity(city string) (float64, float64, error) {
 
 	GeocodeCityUrl := func(city string) string {
 		cityEncoded := url.QueryEscape(city)
-		return "https://api.geocode.city/autocomplete?limit=1&q=" + cityEncoded
+		return "https://api.geocode.city/autocomplete?limit=1&q=" + cityEncoded // TODO: rewrite to fetch first US result, solves https://github.com/Joe-TheBro/wackyweathertext/issues/11
 	}
 
-	url := GeocodeCityUrl(city)
+	geocodeCityUrl := GeocodeCityUrl(city)
 	requestHeaders := make(map[string]string)
 	requestHeaders["accept"] = "application/json;charset=utf-8"
 
-	resp, err := GetRequest(url, requestHeaders)
-
-	// while unlikely, there is a chance that our response empty, if we try to Close()
-	// having an empty body it would dereference a nullptr possibly leading to unexpected behavior, ＞﹏＜
-	if resp != nil {
-		defer resp.Body.Close()
-	}
+	resp, err := GetRequest(geocodeCityUrl, requestHeaders)
 
 	if err != nil {
 		return ERRORLONGITUDE, ERRORLATITUDE, err
+	}
+
+	// there is a chance that our response empty (especially if a user tries to search for a city that does not exist),
+	// if we try to Close() having an empty body it would dereference a nullptr possibly leading to unexpected behavior, ＞﹏＜
+	if resp.Body != nil {
+		defer func(Body io.ReadCloser) {
+			err := Body.Close()
+			if err != nil {
+				log.Fatal(err)
+			}
+		}(resp.Body)
 	}
 
 	err = CheckHttpStatusCode(resp, 200)
@@ -96,14 +101,38 @@ func GeocodeCity(city string) (float64, float64, error) {
 		return ERRORLONGITUDE, ERRORLONGITUDE, err
 	}
 
-	var geocodeResponse []GeocodeResponse
-	err = DecodeJsonResponse(resp, &geocodeResponse)
+	//var geocodeResponse []GeocodeResponse
+	//err = DecodeJsonResponse(resp, &geocodeResponse)
+	//if err != nil {
+	//	return ERRORLONGITUDE, ERRORLATITUDE, err
+	//}
+
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return ERRORLONGITUDE, ERRORLATITUDE, err
+		return ERRORLONGITUDE, ERRORLONGITUDE, err
+	}
+
+	// debug
+	//fmt.Printf(string(body))
+
+	var rawResponse interface{}
+	err = json.Unmarshal(body, &rawResponse)
+	if err != nil {
+		return ERRORLONGITUDE, ERRORLONGITUDE, err
+	}
+
+	if reflect.ValueOf(rawResponse).Kind() == reflect.Slice && reflect.ValueOf(rawResponse).Len() == 0 {
+		return ERRORLONGITUDE, ERRORLONGITUDE, errors.New("the requested city could not be found")
+	}
+
+	var geocodeResponse []GeocodeResponse
+	err = json.Unmarshal(body, &geocodeResponse)
+	if err != nil {
+		return ERRORLONGITUDE, ERRORLONGITUDE, err
 	}
 
 	//* Debug print statement
-	//fmt.Printf("%s\n%f\n%f\n%s\n", geocodeResponse[0].Name, geocodeResponse[0].Longitude, geocodeResponse[0].Latitude, geocodeResponse[0].Country)
+	fmt.Printf("%s\n%f\n%f\n%s\n", geocodeResponse[0].Name, geocodeResponse[0].Longitude, geocodeResponse[0].Latitude, geocodeResponse[0].Country)
 	return geocodeResponse[0].Latitude, geocodeResponse[0].Longitude, nil
 }
 
