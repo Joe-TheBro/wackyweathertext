@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"reflect"
+	"strings"
 	"time"
 	// "github.com/piprate/json_gold/ld"
 	// _ "github.com/mattn/go-sqlite3"
@@ -301,7 +302,8 @@ func main() {
 		return
 	}
 
-	lat, long, err := GeocodeCity(os.Args[1])
+	userInput := strings.Join(os.Args[1:], " ")
+	lat, long, err := GeocodeCity(userInput)
 	if err != nil {
 		log.Fatal(err)
 	}
