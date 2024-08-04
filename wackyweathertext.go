@@ -16,6 +16,16 @@ import (
 	// _ "github.com/mattn/go-sqlite3"
 )
 
+const (
+	SUNNY = iota
+	CLOUDY
+	RAINY
+	THUNDERSTORMS
+	TORNADO
+	HAIL
+	SNOW
+)
+
 type GeocodeResponse struct {
 	Name        string  `json:"name"`
 	Longitude   float64 `json:"longitude"`
@@ -284,10 +294,123 @@ func GetDailyForecasts(link string) ([]ForecastPeriods, error) {
 	return forecast, nil
 }
 
+func ExtractForecastKeywords(shortForecast string) (int, error) {
+	lowerShortForecast := strings.ToLower(shortForecast)
+
+	sunnyStrings := [2]string{"sun", "sunny"}
+	cloudyStrings := [2]string{"clouds", "cloudy"}
+	rainyStrings := [2]string{"rainy", "rain"}
+	thunderstormStrings := [3]string{"thunder", "thunderstorms", "lightning"}
+	tornadoString := "tornado"
+	hailString := "hail"
+	snowStrings := [2]string{"snow", "snowy"}
+
+	if strings.Contains(lowerShortForecast, tornadoString) {
+		return TORNADO, nil
+	}
+
+	if strings.Contains(lowerShortForecast, hailString) {
+		return HAIL, nil
+	}
+
+	for _, word := range snowStrings {
+		if strings.Contains(lowerShortForecast, word) {
+			return SNOW, nil
+		}
+	}
+
+	for _, word := range thunderstormStrings {
+		if strings.Contains(lowerShortForecast, word) {
+			return THUNDERSTORMS, nil
+		}
+	}
+
+	for _, word := range rainyStrings {
+		if strings.Contains(lowerShortForecast, word) {
+			return RAINY, nil
+		}
+	}
+
+	for _, word := range cloudyStrings {
+		if strings.Contains(lowerShortForecast, word) {
+			return CLOUDY, nil
+		}
+	}
+
+	for _, word := range sunnyStrings {
+		if strings.Contains(lowerShortForecast, word) {
+			return SUNNY, nil
+		}
+	}
+
+	return -1, errors.New("could not extract forecast")
+}
+
+func renderAscii(forecast ForecastPeriods) (string, error) {
+	weatherType, err := ExtractForecastKeywords(forecast.ShortForecast)
+	if err != nil {
+		return "", err
+	}
+
+	if weatherType == TORNADO {
+		tornado := "              . '@(@@@@@@@)@. (@@) `  .   '\n     .  @@'((@@@@@@@@@@@)@@@@@)@@@@@@@)@ \n     @@(@@@@@@@@@@))@@@@@@@@@@@@@@@@)@@` .\n  @.((@@@@@@@)(@@@@@@@@@@@@@@))@\\@@@@@@@@@)@@@  .\n (@@@@@@@@@@@@@@@@@@)@@@@@@@@@@@\\\\@@)@@@@@@@@)\n(@@@@@@@@)@@@@@@@@@@@@@(@@@@@@@@//@@@@@@@@@) ` \n .@(@@@@)##&&&&&(@@@@@@@@)::_=(@\\\\@@@@)@@ .   .'\n   @@`(@@)###&&&&&!!;;;;;;::-_=@@\\\\@)@`@.\n   `   @@(@###&&&&!!;;;;;::-=_=@.@\\\\@@     '\n      `  @.#####&&&!!;;;::=-_= .@  \\\\\n            ####&&&!!;;::=_-        `\n             ###&&!!;;:-_=\n              ##&&!;::_=\n             ##&&!;:=\n            ##&&!:-\n           #&!;:-\n          #&!;=\n          #&!-\n           #&=\n   jgs      #&-\n            \\\\#/'"
+		return tornado, nil
+	}
+
+	if weatherType == HAIL {
+		return "", nil
+	}
+
+	if weatherType == SNOW {
+		return "", nil
+	}
+
+	if weatherType == THUNDERSTORMS {
+		return "", nil
+	}
+
+	if weatherType == RAINY {
+		rainCloud := `            ------               _____
+           /      \ ___\     ___/    ___
+        --/-  ___  /    \/  /  /    /   \
+       /     /           \__     //_     \
+      /                     \   / ___     |
+      |           ___       \/+--/        /
+       \__           \       \           /
+          \__                 |          /
+         \     /____      /  /       |   /
+          _____/         ___       \/  /\
+               \__      /      /    |    |
+             /    \____/   \       /   //
+         // / / // / /\    /-_-/\//-__-
+          /  /  // /   \__// / / /  //
+         //   / /   //   /  // / // /
+          /// // / /   /  //  / //
+       //   //       //  /  // / /
+         / / / / /     /  /    /
+      ///  / / /  //  // /  // //
+         ///    /    /    / / / /
+    ///  /    // / /  // / / /  /
+       // ///   /      /// / /`
+		return rainCloud, nil
+	}
+
+	if weatherType == CLOUDY {
+		clouds := "\n                _                                  \n              (`  ).                   _           \n             (     ).              .:(`  )`.       \n)           _(       '`.          :(   .    )      \n        .=(`(      .   )     .--  `.  (    ) )      \n       ((    (..__.:'-'   .+(   )   ` _`  ) )                 \n`.     `(       ) )       (   .  )     (   )  ._   \n  )      ` __.:'   )     (   (   ))     `-'.-(`  ) \n)  )  ( )       --'       `- __.'         :(      )) \n.-'  (_.'          .')                    `(    )  ))\n                  (_  )                     ` __.:'          \n                                        \n"
+		return clouds, nil
+	}
+
+	if weatherType == SUNNY {
+		sun := "      ;   :   ;\n   .   \\_,!,_/   ,\n    `.,'     `.,'\n     /         \\\n~ -- :         : -- ~\n     \\         /\n    ,'`._   _.'`.\n   '   / `!` \\   `\n      ;   :   ;  hjw"
+		return sun, nil
+	}
+	return "", errors.New("could not render forecast")
+}
+
 func CheckArgs(args []string) bool {
 	if len(args) <= 0 {
 		fmt.Println("Usage: 'go build wackyweathertext.go'\n" +
-			"'./wackyweathertext cityName'\n")
+			"'./wackyweathertext cityName'")
 		//"If your city is more than one word, make sure to wrap your city name with quotation marks."
 
 		return false
@@ -321,5 +444,7 @@ func main() {
 
 	currForecast := forecasts[0]
 
-	fmt.Printf("%s\n%d°%s\n%s", currForecast.PeriodName, currForecast.Temperature, currForecast.TemperatureUnit, currForecast.DetailedForecast)
+	fmt.Printf("%s\n%d°%s\n%s\n", currForecast.PeriodName, currForecast.Temperature, currForecast.TemperatureUnit, currForecast.DetailedForecast)
+	ascii, err := renderAscii(currForecast)
+	fmt.Println(ascii)
 }
